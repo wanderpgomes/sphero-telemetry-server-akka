@@ -1,10 +1,14 @@
 package ca.wglabs.sphero.services
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.http.scaladsl.server.{Directives, Route}
-import akka.stream.{ActorMaterializer, FlowShape}
-import akka.stream.scaladsl.{Flow, GraphDSL, Merge}
+import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Sink, Source}
+import akka.stream.{ActorMaterializer, FlowShape, OverflowStrategy}
+import ca.wglabs.sphero.actor.{DrivingAreaActor, IncomingMeasurement}
+import ca.wglabs.sphero.model._
+import ca.wglabs.sphero.util.JsonFormat._
+import spray.json._
 
 class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit  val actorMaterializer: ActorMaterializer) extends Directives {
 
@@ -14,18 +18,33 @@ class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit  v
     }
   }
 
-  def flow(deviceName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(){ implicit builder =>
+  val drivingAreaActor = actorSystem.actorOf(Props(new DrivingAreaActor()))
+  val spheroActorSource = Source.actorRef[SpheroEvent](5, OverflowStrategy.fail)
+
+  def flow(spheroName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(spheroActorSource){ implicit builder => spheroActor =>
     import GraphDSL.Implicits._
 
-    val materialization = builder.materializedValue.map(m => TextMessage(s"$deviceName registered"))
+    val materialization = builder.materializedValue.map(playerActorRef => SpheroJoined(spheroName, playerActorRef))
+    val merge = builder.add(Merge[SpheroEvent](2))
 
-    val messagePassingFlow = builder.add(Flow[Message].map(m => m))
+    val messagesToSpheroEventsFlow = builder.add(Flow[Message].collect {
+      case TextMessage.Strict(measurement) => {
+        SpheroMeasurement(spheroName)
+      }
+    })
 
-    val merge = builder.add(Merge[Message](2))
+    val spheroEventsToMessagesFlow = builder.add(Flow[SpheroEvent].map {
+      case SpheroNotification(color) => TextMessage("bla")
+    })
 
-    materialization ~> merge.in(0)
-    merge ~> messagePassingFlow
+    val drivingAreaActorSink = Sink.actorRef[SpheroEvent](drivingAreaActor, SpheroLeft(spheroName))
 
-    FlowShape(merge.in(1), messagePassingFlow.out)
+    materialization ~> merge ~> drivingAreaActorSink
+    messagesToSpheroEventsFlow ~> merge
+
+    spheroActor ~> spheroEventsToMessagesFlow
+
+    FlowShape(messagesToSpheroEventsFlow.in, spheroEventsToMessagesFlow.out)
   })
 }
+

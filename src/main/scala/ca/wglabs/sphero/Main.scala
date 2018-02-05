@@ -21,7 +21,7 @@ object Main extends App {
 
   val port = config.getInt("app.port")
 
- val spheroTelemetryService = new SpheroTelemetryService()
+  val spheroTelemetryService = new SpheroTelemetryService()
 
   val binding = Http().bindAndHandle(spheroTelemetryService.route, interface, port)
   println(s"Server is now online at http://$interface:$port\nPress RETURN to stop...")

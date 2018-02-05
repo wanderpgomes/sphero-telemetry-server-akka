@@ -13,5 +13,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http-testkit" % "10.0.11" % Test,
   "org.java-websocket" % "Java-WebSocket" % "1.3.0" % Test,
 
-  "org.scalatest" % "scalatest_2.12" % "3.0.4" % Test
+  "org.scalatest" % "scalatest_2.12" % "3.0.4" % Test,
+
+  "io.spray" %%  "spray-json" % "1.3.2"
 )
