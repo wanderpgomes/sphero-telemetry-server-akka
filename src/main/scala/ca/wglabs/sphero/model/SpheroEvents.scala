@@ -1,7 +1,6 @@
 package ca.wglabs.sphero.model
 
 import akka.actor.ActorRef
-import ca.wglabs.sphero.actor.IncomingMeasurement
 
 
 sealed trait SpheroEvent

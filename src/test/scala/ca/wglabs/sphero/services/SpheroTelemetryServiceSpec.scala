@@ -16,12 +16,14 @@ class SpheroTelemetryServiceSpec extends FunSuite with Matchers with ScalatestRo
         }
     }
 
+
     test("should echo the message sent after registration") {
       val wsClient = WSProbe()
       WS("/sphero-data/bb8", wsClient.flow) ~> spheroTelemetryService.route ~>
         check {
 
           wsClient.sendMessage("{\"event\":\"dataStreaming\"}")
+          wsClient.expectMessage("{\"color\":\"red\"}")
         }
     }
 

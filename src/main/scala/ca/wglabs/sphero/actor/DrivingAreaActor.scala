@@ -3,7 +3,6 @@ package ca.wglabs.sphero.actor
 import akka.actor.{Actor, ActorRef}
 import ca.wglabs.sphero.model.{SpheroJoined, SpheroLeft, SpheroMeasurement, SpheroNotification}
 
-
 case class Sphero(name: String, score: Int)
 case class SpheroWithActor(sphero: Sphero, actor: ActorRef)
 case class IncomingMeasurement(event: String)

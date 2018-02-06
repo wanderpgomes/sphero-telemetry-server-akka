@@ -6,5 +6,5 @@ import spray.json.DefaultJsonProtocol
 
 object JsonFormat extends DefaultJsonProtocol {
     implicit val incomingMessageFormat = jsonFormat1(IncomingMeasurement)
-    implicit val spheroNotification = jsonFormat1(SpheroNotification)
+    implicit val spheroNotificationFormat = jsonFormat1(SpheroNotification)
 }
