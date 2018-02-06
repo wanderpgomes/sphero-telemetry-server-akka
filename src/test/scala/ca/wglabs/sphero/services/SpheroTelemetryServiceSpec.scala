@@ -17,14 +17,17 @@ class SpheroTelemetryServiceSpec extends FunSuite with Matchers with ScalatestRo
     }
 
 
-    test("should echo the message sent after registration") {
+    test("should send message back if velocity is greater than 3.0") {
       val wsClient = WSProbe()
+      val sensorData = "{ xVelocity: { sensor: 'velocity X', range: { bottom: -32768, top: 32767 }, units: 'mm/s', value: [ 11 ] }, yVelocity: { sensor: 'velocity Y', range: { bottom: -32768, top: 32767 }, units: 'mm/s', value: [ -21 ] }}"
       WS("/sphero-data/bb8", wsClient.flow) ~> spheroTelemetryService.route ~>
-        check {
-
-          wsClient.sendMessage("{\"event\":\"dataStreaming\"}")
+      check {
+          wsClient.sendMessage(sensorData)
           wsClient.expectMessage("{\"color\":\"red\"}")
         }
     }
 
+
+
 }
+
