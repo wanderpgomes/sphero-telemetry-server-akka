@@ -6,7 +6,7 @@ import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Sink, Source}
 import akka.stream.{ActorMaterializer, FlowShape, OverflowStrategy}
 import ca.wglabs.sphero.actor._
-import ca.wglabs.sphero.model.{SpheroNotification, _}
+import ca.wglabs.sphero.model.{SpheroNotified, _}
 import ca.wglabs.sphero.util.JsonFormat._
 import spray.json._
 
@@ -29,15 +29,12 @@ class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit  v
 
     val messagesToSpheroEventsFlow = builder.add(Flow[Message].collect {
       case TextMessage.Strict(measurement) => {
-        SpheroMeasurement(spheroName)
+        SpheroMeasurementReceived(spheroName, measurement.parseJson.convertTo[Measurement])
       }
     })
 
     val spheroEventsToMessagesFlow = builder.add(Flow[SpheroEvent].map {
-      case n:SpheroNotification => {
-
-        TextMessage(n.toJson.toString)
-      }
+      case n:SpheroNotified => TextMessage(n.toJson.toString)
     })
 
     val drivingAreaActorSink = Sink.actorRef[SpheroEvent](drivingAreaActor, SpheroLeft(spheroName))
