@@ -26,8 +26,8 @@ class DrivingAreaActor extends Actor {
     }
 
     case SpheroMeasurementReceived(spheroName, measurement) => {
-      println(s"Incoming message received for $spheroName: ")
-      if (measurement.xVelocity.value(0) > 3) notifySphero(spheroName)
+      println(s"Incoming message received for $spheroName: xVelocity=${measurement.xVelocity.value(0)} yVelocity=${measurement.yVelocity.value(0)}")
+      if (measurement.yVelocity.value(0) > 3) notifySphero(spheroName)
     }
 
     case _ => println("Invalid Sphero Event")
