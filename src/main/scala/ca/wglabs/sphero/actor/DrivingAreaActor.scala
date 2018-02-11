@@ -1,15 +1,21 @@
 package ca.wglabs.sphero.actor
 
 import akka.actor.{Actor, ActorRef}
-import ca.wglabs.sphero.model.{SpheroJoined, SpheroLeft, SpheroMeasurementReceived, SpheroNotified}
+import ca.wglabs.sphero.model._
 
-case class Sphero(name: String, score: Int)
+case class Sphero(name: String, var score: Int)
 case class SpheroWithActor(sphero: Sphero, actor: ActorRef)
 
-case class Measurement(xVelocity: Velocity, yVelocity: Velocity)
-case class Velocity(units: String, value: List[Int])
+
 
 class DrivingAreaActor extends Actor {
+
+  val scoreMax = 30
+  val scoreIncrement = 10
+  val velocityMax = 900.00
+
+  val warningColor = "yellow"
+  val infractionColor = "red"
 
   val spheros = collection.mutable.LinkedHashMap[String, SpheroWithActor]()
 
@@ -25,16 +31,30 @@ class DrivingAreaActor extends Actor {
       println(s"Sphero left: $spheroName")
     }
 
-    case SpheroMeasurementReceived(spheroName, measurement) => {
-      println(s"Incoming message received for $spheroName: xVelocity=${measurement.xVelocity.value(0)} yVelocity=${measurement.yVelocity.value(0)}")
-      if (measurement.yVelocity.value(0) > 3) notifySphero(spheroName)
+    case SpheroIncomingMeasurement(spheroName, measurement) => {
+      val velocity = calculateVelocity(measurement)
+      if (velocity > velocityMax) {
+        val sphero = spheros(spheroName).sphero
+        sphero.score = sphero.score + scoreIncrement
+        logMeasurement(sphero, velocity, measurement)
+
+        if (sphero.score >= scoreMax) sendCommand(spheroName, infractionColor)
+        else sendCommand(spheroName, warningColor)
+      }
     }
 
-    case _ => println("Invalid Sphero Event")
-
+    case _ => println("Invalid message")
   }
 
-  def notifySphero(spheroName: String): Unit = {
-    spheros(spheroName).actor ! SpheroNotified("red")
+  def logMeasurement(sphero: Sphero, velocity: Double, measurement: Measurement): Unit ={
+    println(s"Sphero: ${sphero.name} score: ${sphero.score}, velocity: $velocity, position (X, Y): (${measurement.positionX.value}, ${measurement.positionY.value}}")
+  }
+
+  def calculateVelocity(m: Measurement) : Double = {
+    Math.sqrt((m.velocityX.value * m.velocityX.value) + (m.velocityY.value * m.velocityY.value))
+  }
+
+  def sendCommand(spheroName: String, color: String) = {
+    spheros(spheroName).actor ! SpheroCommand(color)
   }
 }
