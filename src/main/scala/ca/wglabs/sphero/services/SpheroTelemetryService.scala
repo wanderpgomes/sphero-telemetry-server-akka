@@ -3,14 +3,14 @@ package ca.wglabs.sphero.services
 import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.http.scaladsl.server.{Directives, Route}
-import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Sink, Source}
-import akka.stream.{ActorMaterializer, FlowShape, OverflowStrategy}
+import akka.stream._
+import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge, Sink, Source}
 import ca.wglabs.sphero.actor._
 import ca.wglabs.sphero.model.{SpheroCommand, _}
 import ca.wglabs.sphero.util.JsonFormat._
 import spray.json._
 
-class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit  val actorMaterializer: ActorMaterializer) extends Directives {
+class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit val actorMaterializer: ActorMaterializer) extends Directives {
 
   def route: Route = path("sphero-data" / Segment) { deviceName =>
     get {
@@ -18,33 +18,43 @@ class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit  v
     }
   }
 
-  val drivingAreaActor = actorSystem.actorOf(Props(new DrivingAreaActor()))
-  val spheroActorSource = Source.actorRef[SpheroEvent](5, OverflowStrategy.fail)
 
-  def flow(spheroName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(spheroActorSource){ implicit builder => spheroActor =>
+  def flow(spheroName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(actorSource){ implicit builder => spheroActor =>
     import GraphDSL.Implicits._
 
-    val materialization = builder.materializedValue.map(playerActorRef => SpheroJoined(spheroName, playerActorRef))
-    val merge = builder.add(Merge[SpheroEvent](2))
 
-    val messagesToSpheroEventsFlow = builder.add(Flow[Message].collect {
-      case TextMessage.Strict(measurement) => {
-        SpheroIncomingMeasurement(spheroName, measurement.parseJson.convertTo[Measurement])
-      }
-    })
+    val materializer: Outlet[SpheroJoined] = builder.materializedValue.map(actorRef => SpheroJoined(spheroName, actorRef)).outlet
+    val source: FlowShape[Message, SpheroMeasurement] = builder.add(messagesToSpheroEvents(spheroName))
 
-    val spheroEventsToMessagesFlow = builder.add(Flow[SpheroEvent].map {
-      case n:SpheroCommand => TextMessage(n.toJson.toString)
-    })
+    // Flows
+    val broadcast: UniformFanOutShape[SpheroEvent, SpheroEvent] = builder.add(Broadcast[SpheroEvent](2))
+    val merge: UniformFanInShape[SpheroEvent, SpheroEvent] = builder.add(Merge[SpheroEvent](2))
+    val back: FlowShape[SpheroEvent, Message] = builder.add(spheroEventsToMessages)
 
-    val drivingAreaActorSink = Sink.actorRef[SpheroEvent](drivingAreaActor, SpheroLeft(spheroName))
 
-    materialization ~> merge ~> drivingAreaActorSink
-    messagesToSpheroEventsFlow ~> merge
+    // Sinks
+    val actorSink: Inlet[SpheroEvent] = builder.add(Sink.actorRef[SpheroEvent](spheroTelemetryActorSink, SpheroLeft(spheroName))).in
+    val printSink: Inlet[Any] = builder.add(Sink.foreach(println)).in
 
-    spheroActor ~> spheroEventsToMessagesFlow
+               materializer   ~>     merge
+                  broadcast   ~>     merge    ~>    actorSink
+    source ~>     broadcast   ~>   printSink
+    back   <~     spheroActor
 
-    FlowShape(messagesToSpheroEventsFlow.in, spheroEventsToMessagesFlow.out)
+    FlowShape(source.in, back.out)
   })
+
+  val actorSource = Source.actorRef[SpheroEvent](5, OverflowStrategy.fail)
+
+  val spheroTelemetryActorSink = actorSystem.actorOf(Props(new SpheroTelemetryActor()))
+
+  val messagesToSpheroEvents = (spheroName: String) => Flow[Message].collect {
+    case TextMessage.Strict(measurement) => SpheroMeasurement(spheroName, measurement.parseJson.convertTo[Measurement])
+  }
+
+  val spheroEventsToMessages = Flow[SpheroEvent].map {
+    case n: SpheroCommand => TextMessage(n.toJson.toString)
+  }
+
 }
 

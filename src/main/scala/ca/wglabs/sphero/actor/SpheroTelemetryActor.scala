@@ -8,10 +8,10 @@ case class SpheroWithActor(sphero: Sphero, actor: ActorRef)
 
 
 
-class DrivingAreaActor extends Actor {
+class SpheroTelemetryActor extends Actor {
 
-  val scoreMax = 30
-  val scoreIncrement = 10
+  val incrementScore = 1
+  val infractionScore = 40
   val velocityMax = 900.00
 
   val warningColor = "yellow"
@@ -31,14 +31,14 @@ class DrivingAreaActor extends Actor {
       println(s"Sphero left: $spheroName")
     }
 
-    case SpheroIncomingMeasurement(spheroName, measurement) => {
+    case SpheroMeasurement(spheroName, measurement) => {
       val velocity = calculateVelocity(measurement)
       if (velocity > velocityMax) {
         val sphero = spheros(spheroName).sphero
-        sphero.score = sphero.score + scoreIncrement
+        sphero.score = sphero.score + incrementScore
         logMeasurement(sphero, velocity, measurement)
 
-        if (sphero.score >= scoreMax) sendCommand(spheroName, infractionColor)
+        if (sphero.score >= infractionScore) sendCommand(spheroName, infractionColor)
         else sendCommand(spheroName, warningColor)
       }
     }

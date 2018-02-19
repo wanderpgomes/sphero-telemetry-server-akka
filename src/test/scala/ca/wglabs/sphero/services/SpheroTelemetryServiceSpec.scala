@@ -16,7 +16,7 @@ class SpheroTelemetryServiceSpec extends FunSuite with Matchers with ScalatestRo
         }
     }
 
-    test("should send message back if velocity is greater than 3.0") {
+    test("should send command back if velocity is greater than the maximum of 900") {
       val wsClient = WSProbe()
       val sensorData = "{" +
         "\"velocityX\": { \"unit\": \"mm/s\", \"value\": 100 }, " +
@@ -29,10 +29,7 @@ class SpheroTelemetryServiceSpec extends FunSuite with Matchers with ScalatestRo
       check {
         wsClient.sendMessage(sensorData)
         wsClient.expectMessage("{\"color\":\"yellow\"}")
-        wsClient.sendMessage(sensorData)
-        wsClient.expectMessage("{\"color\":\"yellow\"}")
-        wsClient.sendMessage(sensorData)
-        wsClient.expectMessage("{\"color\":\"red\"}")
+
       }
     }
 

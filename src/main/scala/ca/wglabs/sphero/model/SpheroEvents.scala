@@ -8,7 +8,7 @@ sealed trait SpheroEvent
 case class SpheroLeft(name: String) extends SpheroEvent
 case class SpheroCommand(color: String) extends SpheroEvent
 case class SpheroJoined(name: String, actorRef: ActorRef) extends SpheroEvent
-case class SpheroIncomingMeasurement(name: String, measurement: Measurement) extends SpheroEvent
+case class SpheroMeasurement(name: String, measurement: Measurement) extends SpheroEvent
 
 case class Measurement(velocityX: Velocity,
                        velocityY: Velocity,
