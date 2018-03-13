@@ -9,6 +9,12 @@ import ca.wglabs.sphero.actor._
 import ca.wglabs.sphero.model.{SpheroCommand, _}
 import ca.wglabs.sphero.util.JsonFormat._
 import spray.json._
+import java.lang.Math._
+import java.util.Date
+
+import constants._
+
+import scala.util.Try
 
 class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit val actorMaterializer: ActorMaterializer) extends Directives {
 
@@ -23,23 +29,26 @@ class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit va
     import GraphDSL.Implicits._
 
 
+    // Sources
     val materializer: Outlet[SpheroJoined] = builder.materializedValue.map(actorRef => SpheroJoined(spheroName, actorRef)).outlet
-    val source: FlowShape[Message, SpheroMeasurement] = builder.add(messagesToSpheroEvents(spheroName))
+    val source: FlowShape[Message, SpheroMeasurement] = builder.add(rawMessagesToSpheroEvents(spheroName))
 
     // Flows
     val broadcast: UniformFanOutShape[SpheroEvent, SpheroEvent] = builder.add(Broadcast[SpheroEvent](2))
     val merge: UniformFanInShape[SpheroEvent, SpheroEvent] = builder.add(Merge[SpheroEvent](2))
-    val back: FlowShape[SpheroEvent, Message] = builder.add(spheroEventsToMessages)
+    val back: FlowShape[SpheroEvent, Message] = builder.add(spheroEventsToRawMessages)
+    val calc: FlowShape[SpheroMeasurement, SpheroMeasurement] = builder.add(calculateVelocity)
+    val filter: FlowShape[SpheroEvent, InfractionDetected] = builder.add(filterVelocityOverLimit(spheroName))
 
 
     // Sinks
     val actorSink: Inlet[SpheroEvent] = builder.add(Sink.actorRef[SpheroEvent](spheroTelemetryActorSink, SpheroLeft(spheroName))).in
     val printSink: Inlet[Any] = builder.add(Sink.foreach(println)).in
 
-               materializer   ~>     merge
-                  broadcast   ~>     merge    ~>    actorSink
-    source ~>     broadcast   ~>   printSink
-    back   <~     spheroActor
+                                    materializer      ~>  merge
+                           broadcast   ~>    filter   ~>  merge    ~>   actorSink
+    source   ~>   calc ~>  broadcast   ~>   printSink
+    back     <~   spheroActor
 
     FlowShape(source.in, back.out)
   })
@@ -48,13 +57,25 @@ class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit va
 
   val spheroTelemetryActorSink = actorSystem.actorOf(Props(new SpheroTelemetryActor()))
 
-  val messagesToSpheroEvents = (spheroName: String) => Flow[Message].collect {
+  val rawMessagesToSpheroEvents = (spheroName: String) => Flow[Message].collect {
     case TextMessage.Strict(measurement) => SpheroMeasurement(spheroName, measurement.parseJson.convertTo[Measurement])
   }
 
-  val spheroEventsToMessages = Flow[SpheroEvent].map {
+  val spheroEventsToRawMessages = Flow[SpheroEvent].map {
     case n: SpheroCommand => TextMessage(n.toJson.toString)
   }
+
+  val calculateVelocity = Flow[SpheroMeasurement].map(sm => {
+      val velocity = Try(sqrt(pow(sm.measurement.velocity.vx, 2) + pow(sm.measurement.velocity.vy, 2))).getOrElse(0.0)
+      sm.measurement.velocity.v = velocity
+      sm
+    }
+  )
+
+  val filterVelocityOverLimit = (spheroName: String) => Flow[SpheroEvent]
+    .map { case sm:SpheroMeasurement => sm}
+    .filter(_.measurement.velocity.v > maxVelocity)
+    .map(sm => InfractionDetected(spheroName, sm.measurement.velocity, sm.measurement.position, new Date()))
 
 }
 
