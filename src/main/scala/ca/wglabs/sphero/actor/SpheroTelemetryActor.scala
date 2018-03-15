@@ -56,6 +56,6 @@ class SpheroTelemetryActor extends Actor {
 
 
   def sendCommand(spheroName: String, color: String) = {
-    spheros(spheroName).actor ! SpheroCommand(color)
+    spheros(spheroName).actor ! SpheroChangeColor(color)
   }
 }

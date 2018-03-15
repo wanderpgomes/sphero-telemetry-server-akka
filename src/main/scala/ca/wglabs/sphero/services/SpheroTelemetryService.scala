@@ -6,7 +6,7 @@ import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream._
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge, Sink, Source}
 import ca.wglabs.sphero.actor._
-import ca.wglabs.sphero.model.{SpheroCommand, _}
+import ca.wglabs.sphero.model.{SpheroChangeColor, _}
 import ca.wglabs.sphero.util.JsonFormat._
 import spray.json._
 import java.lang.Math._
@@ -63,7 +63,7 @@ class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit va
   }
 
   val spheroEventsToRawMessages = Flow[SpheroEvent].map {
-    case n: SpheroCommand => TextMessage(n.toJson.toString)
+    case n: SpheroChangeColor => TextMessage(n.toJson.toString)
   }
 
   val calculateVelocity = Flow[SpheroMeasurement].map(sm => {
