@@ -48,6 +48,7 @@ class SpheroTelemetryService(implicit val actorSystem : ActorSystem, implicit va
                                     materializer      ~>  merge
                            broadcast   ~>    filter   ~>  merge    ~>   actorSink
     source   ~>   calc ~>  broadcast   ~>   printSink
+
     back     <~   spheroActor
 
     FlowShape(source.in, back.out)

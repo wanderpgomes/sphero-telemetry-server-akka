@@ -1,22 +1,26 @@
 package ca.wglabs.sphero.actor
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, ActorSystem}
 import ca.wglabs.sphero.model._
 
-case class Sphero(name: String, var score: Int)
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+
+case class Sphero(name: String, var score: Int = 0, var exempt: Boolean = false)
 case class SpheroWithActor(sphero: Sphero, actor: ActorRef)
 
 
 
 class SpheroTelemetryActor extends Actor {
 
+  val system = ActorSystem("akka-system")
 
   val spheros = collection.mutable.LinkedHashMap[String, SpheroWithActor]()
 
   override def receive: Receive = {
 
     case SpheroJoined(spheroName, actor) => {
-      spheros += (spheroName -> SpheroWithActor(Sphero(spheroName, 0), actor))
+      spheros += (spheroName -> SpheroWithActor(Sphero(spheroName), actor))
       println(s"Sphero joined: $spheroName")
     }
 
@@ -26,9 +30,25 @@ class SpheroTelemetryActor extends Actor {
     }
 
     case InfractionDetected(spheroName, velocity, position, date) => {
+      val sphero = spheros(spheroName).sphero
+      if (!sphero.exempt) {
+        sphero.score += 1
+        sphero.exempt = true
+        if (sphero.score > 1) sendCommand(spheroName, "red")
+        else sendCommand(spheroName, "yellow")
 
-      println("Infraction detected!!")
-      sendCommand(spheroName, "red")
+        system.scheduler.scheduleOnce(10 seconds, self, InfractionExempt(sphero.name, false))
+        println(s"Infraction detected for device $spheroName: velocity=$velocity, date=$date")
+      } else {
+        sendCommand(spheroName, "yellow")
+        println(s"Infraction detected for device $spheroName, but it is temporarily exempt.")
+      }
+
+    }
+
+    case InfractionExempt(spheroName, exempt) => {
+      val sphero = spheros(spheroName).sphero
+      sphero.exempt = exempt
     }
 
     case _ => println("Invalid message")
