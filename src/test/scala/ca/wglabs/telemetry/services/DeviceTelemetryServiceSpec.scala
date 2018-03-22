@@ -46,25 +46,5 @@ class DeviceTelemetryServiceSpec extends FunSuite with Matchers with ScalatestRo
         wsClient.expectMessage("{\"color\":\"yellow\"}")
       }
   }
-
-  test("should send command yellow and then red back if velocity is greater than the maximum of 900 and again after 10 seconds") {
-    val wsClient = WSProbe()
-    val sensorData = "{" +
-      "\"velocity\": { \"unit\": \"mm/s\", \"v\": 0.0, \"vx\": 100, \"vy\": 900 }, " +
-      "\"position\": { \"unit\": \"cm\", \"x\": 10, \"y\": 15 } " +
-      "}"
-
-    WS("/sphero-data/bb8", wsClient.flow) ~> spheroTelemetryService.route ~>
-      check {
-        wsClient.sendMessage(sensorData)
-        wsClient.expectMessage("{\"color\":\"yellow\"}")
-        Thread.sleep(11000)
-        wsClient.sendMessage(sensorData)
-        wsClient.expectMessage("{\"color\":\"red\"}")
-      }
-  }
-
-
-
 }
 
