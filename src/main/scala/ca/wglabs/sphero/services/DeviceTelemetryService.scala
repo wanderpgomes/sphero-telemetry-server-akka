@@ -56,7 +56,7 @@ class DeviceTelemetryService(implicit val actorSystem : ActorSystem, implicit va
 
   val actorSource = Source.actorRef[DeviceEvent](5, OverflowStrategy.fail)
 
-  val spheroTelemetryActorSink = actorSystem.actorOf(Props(new SpheroTelemetryActor()))
+  val spheroTelemetryActorSink = actorSystem.actorOf(Props(new InfractionActor()))
 
   def messageToDeviceEventFlow(deviceName: String): Flow[Message, DeviceMeasurement, NotUsed] =
     Flow[Message]
