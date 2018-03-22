@@ -19,17 +19,17 @@ class SpheroTelemetryActor extends Actor {
 
   override def receive: Receive = {
 
-    case SpheroJoined(spheroName, actor) => {
+    case DeviceJoined(spheroName, actor) => {
       spheros += (spheroName -> SpheroWithActor(Sphero(spheroName), actor))
       println(s"Sphero joined: $spheroName")
     }
 
-    case SpheroLeft(spheroName) => {
+    case DeviceLeft(spheroName) => {
       spheros -= spheroName
       println(s"Sphero left: $spheroName")
     }
 
-    case InfractionDetected(spheroName, velocity, position, date) => {
+    case VelocityInfraction(spheroName, velocity, position, date) => {
       val sphero = spheros(spheroName).sphero
       if (!sphero.exempt) {
         sphero.score += 1
@@ -56,6 +56,6 @@ class SpheroTelemetryActor extends Actor {
 
 
   def sendCommand(spheroName: String, color: String) = {
-    spheros(spheroName).actor ! SpheroChangeColor(color)
+    spheros(spheroName).actor ! DeviceCommand(color)
   }
 }

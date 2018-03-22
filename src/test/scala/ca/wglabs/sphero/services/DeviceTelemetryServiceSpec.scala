@@ -3,9 +3,9 @@ package ca.wglabs.sphero.services
 import akka.http.scaladsl.testkit.{ScalatestRouteTest, WSProbe}
 import org.scalatest.{FunSuite, Matchers}
 
-class SpheroTelemetryServiceSpec extends FunSuite with Matchers with ScalatestRouteTest {
+class DeviceTelemetryServiceSpec extends FunSuite with Matchers with ScalatestRouteTest {
 
-    val spheroTelemetryService = new SpheroTelemetryService
+    val spheroTelemetryService = new DeviceTelemetryService
 
     test("should be able to connect to SpheroTelemetryService websocket") {
       val wsClient = WSProbe()
