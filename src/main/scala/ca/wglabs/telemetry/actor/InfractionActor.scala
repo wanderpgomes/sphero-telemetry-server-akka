@@ -1,7 +1,7 @@
-package ca.wglabs.sphero.actor
+package ca.wglabs.telemetry.actor
 
 import akka.actor.{Actor, ActorRef, ActorSystem}
-import ca.wglabs.sphero.model._
+import ca.wglabs.telemetry.model._
 
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global

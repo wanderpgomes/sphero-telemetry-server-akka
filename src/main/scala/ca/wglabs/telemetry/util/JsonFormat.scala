@@ -1,6 +1,6 @@
-package ca.wglabs.sphero.util
+package ca.wglabs.telemetry.util
 
-import ca.wglabs.sphero.model.{Measurement, Position, DeviceCommand, Velocity}
+import ca.wglabs.telemetry.model.{Measurement, Position, DeviceCommand, Velocity}
 import spray.json.DefaultJsonProtocol
 
 object JsonFormat extends DefaultJsonProtocol {

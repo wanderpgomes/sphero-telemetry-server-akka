@@ -1,4 +1,4 @@
-package ca.wglabs.sphero.services
+package ca.wglabs.telemetry.services
 
 import akka.http.scaladsl.testkit.{ScalatestRouteTest, WSProbe}
 import org.scalatest.{FunSuite, Matchers}

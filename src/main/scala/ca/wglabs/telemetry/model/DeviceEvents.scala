@@ -1,4 +1,4 @@
-package ca.wglabs.sphero.model
+package ca.wglabs.telemetry.model
 
 import java.util.Date
 

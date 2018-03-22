@@ -1,13 +1,13 @@
-package ca.wglabs.sphero.services
+package ca.wglabs.telemetry.services
 
 import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream._
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge, Sink, Source}
-import ca.wglabs.sphero.actor._
-import ca.wglabs.sphero.model.{DeviceCommand, _}
-import ca.wglabs.sphero.util.JsonFormat._
+import ca.wglabs.telemetry.actor._
+import ca.wglabs.telemetry.model.{DeviceCommand, _}
+import ca.wglabs.telemetry.util.JsonFormat._
 import spray.json._
 import java.lang.Math._
 import java.util.Date

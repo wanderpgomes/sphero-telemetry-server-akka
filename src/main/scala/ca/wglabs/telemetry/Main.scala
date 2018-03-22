@@ -1,9 +1,9 @@
-package ca.wglabs.sphero
+package ca.wglabs.telemetry
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
-import ca.wglabs.sphero.services.DeviceTelemetryService
+import ca.wglabs.telemetry.services.DeviceTelemetryService
 
 import scala.io.StdIn
 

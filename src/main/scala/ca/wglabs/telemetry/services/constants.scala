@@ -1,4 +1,4 @@
-package ca.wglabs.sphero.services
+package ca.wglabs.telemetry.services
 
 object constants {
 
