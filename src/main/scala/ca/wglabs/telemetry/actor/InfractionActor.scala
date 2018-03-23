@@ -37,11 +37,11 @@ class InfractionActor extends Actor {
         if (device.score > 1) sendCommand(deviceName, "red")
         else sendCommand(deviceName, "yellow")
 
-        system.scheduler.scheduleOnce(10 seconds, self, InfractionExempt(device.name, false))
-        println(s"Infraction detected for device $deviceName: velocity=$velocity, date=$date")
+        system.scheduler.scheduleOnce(5 seconds, self, InfractionExempt(device.name, false))
+        println(s"Infraction detected for device name=$deviceName, velocity=$velocity, date=$date")
       } else {
         sendCommand(deviceName, "yellow")
-        println(s"Infraction detected for device $deviceName, but it is temporarily exempt.")
+        println(s"Infraction detected for device name=$deviceName, but it is temporarily exempt.")
       }
 
     }
