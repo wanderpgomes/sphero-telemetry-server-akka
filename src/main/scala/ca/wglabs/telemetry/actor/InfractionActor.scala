@@ -2,11 +2,12 @@ package ca.wglabs.telemetry.actor
 
 import akka.actor.{Actor, ActorRef, ActorSystem}
 import ca.wglabs.telemetry.model._
+import ca.wglabs.telemetry.services.constants.{firstInfractionColor, _}
 
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
-case class Device(name: String, var score: Int = 0, var exempt: Boolean = false)
+case class Device(name: String, var points: Int = 0, var isExempt: Boolean = false)
 case class DeviceWithActor(device: Device, actor: ActorRef)
 
 
@@ -31,31 +32,38 @@ class InfractionActor extends Actor {
 
     case VelocityInfraction(deviceName, velocity, position, date) => {
       val device = devices(deviceName).device
-      if (!device.exempt) {
-        device.score += 1
-        device.exempt = true
-        if (device.score > 1) sendCommand(deviceName, "red")
-        else sendCommand(deviceName, "yellow")
-
-        system.scheduler.scheduleOnce(5 seconds, self, InfractionExempt(device.name, false))
-        println(s"Infraction detected for device name=$deviceName, velocity=$velocity, date=$date")
+      if (device.isExempt) {
+        println(s"Velocity Infraction detected for device name=$deviceName," +
+          s" but it is exempt for $infractionExemptionPeriod seconds")
       } else {
-        sendCommand(deviceName, "yellow")
-        println(s"Infraction detected for device name=$deviceName, but it is temporarily exempt.")
+        sendDeviceCommand(device)
+        updateDeviceState(device)
+        system.scheduler.scheduleOnce(infractionExemptionPeriod seconds, self, InfractionExempt(device.name, false))
+        println(s"Velocity Infraction detected for device" +
+          s" name=$deviceName," +
+          s" velocity=${velocity.v} ${velocity.unit}," +
+          s" position=(${position.x}, ${position.y}," +
+          s" date=$date")
       }
-
     }
 
     case InfractionExempt(deviceName, exempt) => {
       val device = devices(deviceName).device
-      device.exempt = exempt
+      device.isExempt = exempt
     }
 
     case _ => println("Invalid message")
   }
 
+  def isFirstInfraction(device: Device) = device.points equals 0
 
-  def sendCommand(deviceName: String, color: String) = {
-    devices(deviceName).actor ! DeviceCommand(color)
+  def updateDeviceState(device: Device) = {
+    device.points += 1
+    device.isExempt = true
+  }
+
+  def sendDeviceCommand(device: Device) = {
+    devices(device.name).actor !
+      DeviceCommand(if (isFirstInfraction(device)) firstInfractionColor else repeatedInfractionColor)
   }
 }

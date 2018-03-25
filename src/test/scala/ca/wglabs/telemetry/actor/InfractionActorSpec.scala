@@ -6,7 +6,6 @@ import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestActorRef, TestKit, TestProbe}
 import ca.wglabs.telemetry.model._
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpecLike}
-import scala.concurrent.duration._
 
 class InfractionActorSpec extends TestKit(ActorSystem())
   with ImplicitSender
@@ -40,7 +39,7 @@ class InfractionActorSpec extends TestKit(ActorSystem())
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
       actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
-      actorUnderTest.underlyingActor.devices.head._2.device.score mustEqual 1
+      actorUnderTest.underlyingActor.devices.head._2.device.points mustEqual 1
     }
 
     "not increment the device's score for the device associated with a 'VelocityInfraction' message if it is exempt" in {
@@ -48,9 +47,9 @@ class InfractionActorSpec extends TestKit(ActorSystem())
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
       actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
-      actorUnderTest.underlyingActor.devices.head._2.device.score mustEqual 1
+      actorUnderTest.underlyingActor.devices.head._2.device.points mustEqual 1
       actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
-      actorUnderTest.underlyingActor.devices.head._2.device.score mustEqual 1
+      actorUnderTest.underlyingActor.devices.head._2.device.points mustEqual 1
     }
 
     "send an 'InfractionExempt' message to itself after receiving a 'VelocityInfraction' message" in {
@@ -58,15 +57,26 @@ class InfractionActorSpec extends TestKit(ActorSystem())
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
       actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
-      actorUnderTest.underlyingActor.devices.head._2.device.exempt mustEqual true
+      actorUnderTest.underlyingActor.devices.head._2.device.isExempt mustEqual true
     }
 
-    "send a 'DeviceCommand(yellow)' message to the device actorRef after receiving a 'VelocityInfraction' message" in {
+    "send a 'DeviceCommand(yellow)' message to the device actor after receiving the first 'VelocityInfraction' message" in {
       val probe = TestProbe()
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
       actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
       probe.expectMsg(DeviceCommand("yellow"))
+    }
+
+    "send a 'DeviceCommand(red)' message to the device actor after receiving a second 'VelocityInfraction' message and it's not exempt" in {
+      val probe = TestProbe()
+      val deviceName = "new-device"
+      actorUnderTest ! DeviceJoined(deviceName, probe.ref)
+      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      probe.expectMsg(DeviceCommand("yellow"))
+      actorUnderTest ! InfractionExempt(deviceName, false)
+      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      probe.expectMsg(DeviceCommand("red"))
     }
   }
 

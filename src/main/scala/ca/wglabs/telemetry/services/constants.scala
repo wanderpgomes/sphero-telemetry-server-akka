@@ -2,6 +2,8 @@ package ca.wglabs.telemetry.services
 
 object constants {
 
-  val maxVelocity = 900.00
-
+  val velocityLimit = 900.00
+  val firstInfractionColor = "yellow"
+  val repeatedInfractionColor = "red"
+  val infractionExemptionPeriod = 5
 }
