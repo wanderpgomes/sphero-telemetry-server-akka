@@ -3,7 +3,7 @@ package ca.wglabs.telemetry
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
-import ca.wglabs.telemetry.services.DeviceTelemetryService
+import ca.wglabs.telemetry.services.DeviceInfractionService
 
 import scala.io.StdIn
 
@@ -21,7 +21,7 @@ object Main extends App {
 
   val port = config.getInt("app.port")
 
-  val spheroTelemetryService = new DeviceTelemetryService()
+  val spheroTelemetryService = new DeviceInfractionService()
 
   val binding = Http().bindAndHandle(spheroTelemetryService.route, interface, port)
   println(s"Server is now online at http://$interface:$port\nPress RETURN to stop...")

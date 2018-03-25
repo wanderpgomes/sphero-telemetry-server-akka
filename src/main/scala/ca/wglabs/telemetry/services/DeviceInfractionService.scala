@@ -19,16 +19,15 @@ import constants._
 import scala.annotation.tailrec
 import scala.util.Try
 
-class DeviceTelemetryService(implicit val actorSystem : ActorSystem, implicit val actorMaterializer: ActorMaterializer) extends Directives {
+class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit val actorMaterializer: ActorMaterializer) extends Directives {
 
-  def route: Route = path("sphero-data" / Segment) { deviceName =>
+  def route: Route = path("measurements" / Segment) { deviceName =>
     get {
       handleWebSocketMessages(flow(deviceName))
     }
   }
 
-
-  def flow(deviceName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(actorSource){ implicit builder => deviceActor =>
+  def flow(deviceName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(measurementActorSource){ implicit builder =>deviceActor =>
     import GraphDSL.Implicits._
 
     // Sources
@@ -36,15 +35,15 @@ class DeviceTelemetryService(implicit val actorSystem : ActorSystem, implicit va
     val source: FlowShape[Message, DeviceMeasurement] = builder.add(messageToDeviceEventFlow(deviceName))
 
     // Flows
-    val broadcast: UniformFanOutShape[DeviceMeasurement, DeviceMeasurement] = builder.add(Broadcast[DeviceMeasurement](3))
-    val merge: UniformFanInShape[DeviceEvent, DeviceEvent] = builder.add(Merge[DeviceEvent](3))
-    val back: FlowShape[DeviceEvent, Message] = builder.add(deviceCommandToMessage)
-    val velocity: FlowShape[DeviceMeasurement, VelocityInfraction] = builder.add(detectVelocityInfractionFlow)
-    val wrongWay: FlowShape[DeviceMeasurement, WrongWayInfraction] = builder.add(detectWrongWayInfractionFlow)
+    val merge = builder.add(Merge[DeviceEvent](3))
+    val back = builder.add(deviceCommandToMessageFlow)
+    val velocity = builder.add(detectVelocityInfractionFlow)
+    val wrongWay = builder.add(detectWrongWayInfractionFlow)
+    val broadcast = builder.add(Broadcast[DeviceMeasurement](3))
 
     // Sinks
-    val actorSink: Inlet[DeviceEvent] = builder.add(Sink.actorRef[DeviceEvent](infractionActorSink, DeviceLeft(deviceName))).in
-    val printSink: Inlet[Any] = builder.add(Sink.foreach(println)).in
+    val printSink = builder.add(Sink.foreach(println)).in
+    val actorSink = builder.add(Sink.actorRef[DeviceEvent](infractionActorSink, DeviceLeft(deviceName))).in
 
                                    materializer    ~>   merge
                   broadcast   ~>     velocity      ~>   merge    ~>   actorSink
@@ -56,9 +55,8 @@ class DeviceTelemetryService(implicit val actorSystem : ActorSystem, implicit va
     FlowShape(source.in, back.out)
   })
 
-  val actorSource = Source.actorRef[DeviceEvent](5, OverflowStrategy.fail)
-
   val infractionActorSink = actorSystem.actorOf(Props(new InfractionActor()))
+  val measurementActorSource = Source.actorRef[DeviceEvent](5, OverflowStrategy.fail)
 
   def messageToDeviceEventFlow(deviceName: String): Flow[Message, DeviceMeasurement, NotUsed] =
     Flow[Message]
@@ -67,33 +65,35 @@ class DeviceTelemetryService(implicit val actorSystem : ActorSystem, implicit va
           DeviceMeasurement(deviceName, measurement.parseJson.convertTo[Measurement])
       }
 
-  val deviceCommandToMessage = Flow[DeviceEvent].map {
-    case dc: DeviceCommand => TextMessage(dc.toJson.toString)
-  }
+  def deviceCommandToMessageFlow: Flow[DeviceEvent, TextMessage.Strict, NotUsed] =
+    Flow[DeviceEvent]
+      .map {
+        case dc: DeviceCommand => TextMessage(dc.toJson.toString)
+      }
 
-  val detectVelocityInfractionFlow: Flow[DeviceMeasurement, VelocityInfraction, NotUsed] =
+  def detectVelocityInfractionFlow: Flow[DeviceMeasurement, VelocityInfraction, NotUsed] =
     Flow[DeviceMeasurement]
       .map(calculateVelocity)
       .filter(isVelocityInfraction)
       .map(m => VelocityInfraction(m.name, m.measurement.velocity, m.measurement.position, new Date()))
 
-  val detectWrongWayInfractionFlow: Flow[DeviceMeasurement, WrongWayInfraction, NotUsed] =
+  def detectWrongWayInfractionFlow: Flow[DeviceMeasurement, WrongWayInfraction, NotUsed] =
     Flow[DeviceMeasurement]
       .groupedWithin(10, 2 seconds)
       .filter(isWrongWayInfraction)
       .map(ms => WrongWayInfraction(ms.head.name, ms.head.measurement.position, new Date()))
-
-  def calculateVelocity(m: DeviceMeasurement): DeviceMeasurement = {
-    val velocity = Try(sqrt(pow(m.measurement.velocity.vx, 2) + pow(m.measurement.velocity.vy, 2))).getOrElse(0.0)
-    m.measurement.velocity.v = velocity; m
-  }
 
   def isVelocityInfraction(m: DeviceMeasurement) = {
     m.measurement.velocity.v > velocityLimit
   }
 
   def isWrongWayInfraction(measurements: Seq[DeviceMeasurement]) = {
-    calculateDistanceDifference(measurements.toList, 0.0) < 0
+    calculateDistanceDifference(measurements.toList, 0.0) < 0.0
+  }
+
+  def calculateVelocity(m: DeviceMeasurement): DeviceMeasurement = {
+    val velocity = Try(sqrt(pow(m.measurement.velocity.vx, 2) + pow(m.measurement.velocity.vy, 2))).getOrElse(0.0)
+    m.measurement.velocity.v = velocity; m
   }
 
   @tailrec
@@ -101,11 +101,11 @@ class DeviceTelemetryService(implicit val actorSystem : ActorSystem, implicit va
     case Nil => acc
     case (_ :: Nil) => acc
     case (m :: ms) =>
-      if (acc >= 0) calculateDistanceDifference(ms.tail, distanceToOrigin(ms.head) - distanceToOrigin(m))
+      if (acc >= 0.0) calculateDistanceDifference(ms.tail, distanceToOrigin(ms.head) - distanceToOrigin(m))
       else acc
   }
 
-  private def  distanceToOrigin(dm: DeviceMeasurement) = {
+  private def distanceToOrigin(dm: DeviceMeasurement) = {
     Try(sqrt(pow(dm.measurement.position.x, 2) + pow(dm.measurement.position.y, 2))).getOrElse(0.0)
   }
 }
