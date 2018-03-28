@@ -1,6 +1,6 @@
 package ca.wglabs.telemetry.services
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream._
@@ -19,6 +19,53 @@ import constants._
 import scala.annotation.tailrec
 import scala.util.Try
 
+/**
+                                                                                              Outlet[DeviceJoined]
+                                                                                            ╔══════════════════════╗
+                                                                                            ║                      ║
+                                                                                            ║                      ╠──┐
+                                                                                            ║     Materializer     │  │───┐
+                                                                                            ║                      ╠──┘   │
+                                                                                            ║                      ║      │
+                                                                                            ╚══════════════════════╝      │              UniformFanInShape[DeviceEvent, DeviceEvent]
+                                                                                                                          │                ╔══════════════════════╗
+                                                                                     FlowShape[DeviceMeasurement, VelocityInfraction]   ┌──╣                      ║                Inlet[DeviceEvent]
+                                                                                            ╔══════════════════════╗      └────────────▶│  │                      ║             ╔══════════════════════╗
+                                                                                            ║                      ║                    └──╣                      ║             ║                      ║
+                                                                                         ┌──╣                      ╠──┐                 ┌──╣                      ╠──┐       ┌──╣      Infraction      ║
+                                                                                 ┌──────▶│  │      Velocity        │  │────────────────▶│  │        Merge         │  │──────▶│  │      ActorSink       ║
+                                                                                 │       └──╣                      ╠──┘                 └──╣                      ╠──┘       └──╣                      ║
+                                                    UniformFanOutShape           │          ║                      ║                    ┌──╣                      ║             ║                      ║
+                                          [DeviceMeasurement, DeviceMeasurement] │          ╚══════════════════════╝     ┌─────────────▶│  │                      ║             ╚══════════════════════╝
+                                                    ╔══════════════════════╗     │                                       │              └──╣                      ║
+     FlowShape[Message, DeviceMeasurement]          ║                      ╠──┐  │   FlowShape[DeviceMeasurement, WrongWayInfraction]      ╚══════════════════════╝
+            ╔══════════════════════╗                ║                      │  │──┘          ╔══════════════════════╗     │
+            ║                      ║                ║                      ╠──┘             ║                      ║     │
+         ┌──╣                      ╠──┐          ┌──╣                      ╠──┐          ┌──╣                      ╠──┐  │
+   ─────▶│  │       Source         │  │─────────▶│  │       Broadcast      │  │─────────▶│  │       WrongWay       │  │──┘
+         └──╣                      ╠──┘          └──╣                      ╠──┘          └──╣                      ╠──┘
+            ║                      ║                ║                      ╠──┐             ║                      ║
+            ╚══════════════════════╝                ║                      │  │──┐          ╚══════════════════════╝
+                                                    ║                      ╠──┘  │
+                                                    ╚══════════════════════╝     │                Inlet[Any]
+                                                                                 │          ╔══════════════════════╗
+                                                                                 │          ║                      ║
+                                                                                 │       ┌──╣                      ║
+                                                                                 └──────▶│  │     Print Sink       ║
+                                                                                         └──╣                      ║
+                                                                                            ║                      ║
+                                                                                            ╚══════════════════════╝
+     FlowShape[DeviceEvent, TextMessage]       Source[DeviceEvent, ActorRef]
+            ╔══════════════════════╗               ╔══════════════════════╗
+            ║                      ║               ║                      ║
+         ┌──╣                      ╠──┐         ┌──╣                      ║
+   ◀─────│  │        Back          │  │◀────────│  │     SourceActor      ║
+         └──╣                      ╠──┘         └──╣                      ║
+            ║                      ║               ║                      ║
+            ╚══════════════════════╝               ╚══════════════════════╝
+
+*/
+
 class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit val actorMaterializer: ActorMaterializer) extends Directives {
 
   def route: Route = path("measurements" / Segment) { deviceName =>
@@ -27,12 +74,12 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
     }
   }
 
-  def flow(deviceName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(measurementActorSource){ implicit builder =>deviceActor =>
+  def flow(deviceName: String): Flow[Message, Message, Any] = Flow.fromGraph(GraphDSL.create(measurementActorSource){ implicit builder => deviceActor =>
     import GraphDSL.Implicits._
 
     // Sources
-    val materializer: Outlet[DeviceJoined] = builder.materializedValue.map(actorRef => DeviceJoined(deviceName, actorRef)).outlet
-    val source: FlowShape[Message, DeviceMeasurement] = builder.add(messageToDeviceEventFlow(deviceName))
+    val materializer = builder.materializedValue.map(actorRef => DeviceJoined(deviceName, actorRef)).outlet
+    val source = builder.add(messageToDeviceMeasurementFlow(deviceName))
 
     // Flows
     val merge = builder.add(Merge[DeviceEvent](3))
@@ -54,11 +101,12 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
 
     FlowShape(source.in, back.out)
   })
+  // @formatter:on
 
-  val infractionActorSink = actorSystem.actorOf(Props(new InfractionActor()))
-  val measurementActorSource = Source.actorRef[DeviceEvent](5, OverflowStrategy.fail)
+  val infractionActorSink: ActorRef = actorSystem.actorOf(Props(new InfractionActor()))
+  val measurementActorSource: Source[DeviceEvent, ActorRef] = Source.actorRef[DeviceEvent](5, OverflowStrategy.fail)
 
-  def messageToDeviceEventFlow(deviceName: String): Flow[Message, DeviceMeasurement, NotUsed] =
+  def messageToDeviceMeasurementFlow(deviceName: String): Flow[Message, DeviceMeasurement, NotUsed] =
     Flow[Message]
       .collect {
         case TextMessage.Strict(measurement) =>
@@ -82,6 +130,8 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
       .groupedWithin(10, 2 seconds)
       .filter(isWrongWayInfraction)
       .map(ms => WrongWayInfraction(ms.head.name, ms.head.measurement.position, new Date()))
+
+
 
   def isVelocityInfraction(m: DeviceMeasurement) = {
     m.measurement.velocity.v > velocityLimit
