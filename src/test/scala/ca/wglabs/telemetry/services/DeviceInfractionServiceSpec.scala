@@ -28,7 +28,7 @@ class DeviceInfractionServiceSpec extends FunSuite with Matchers with ScalatestR
       WS("/measurements/bb8", wsClient.flow) ~> deviceInfractionService.route ~>
       check {
         wsClient.sendMessage(sensorData)
-        wsClient.expectMessage("{\"color\":\"yellow\"}")
+        wsClient.expectMessage("""{"color":"yellow"}""")
 
       }
     }
@@ -44,7 +44,7 @@ class DeviceInfractionServiceSpec extends FunSuite with Matchers with ScalatestR
     WS("/measurements/bb8", wsClient.flow) ~> deviceInfractionService.route ~>
       check {
         wsClient.sendMessage(sensorData)
-        wsClient.expectMessage("{\"color\":\"yellow\"}")
+        wsClient.expectMessage("""{"color":"yellow"}""")
       }
   }
 

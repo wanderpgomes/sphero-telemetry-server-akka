@@ -6,7 +6,7 @@ import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream._
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge, Sink, Source}
 import ca.wglabs.telemetry.actor._
-import ca.wglabs.telemetry.model.{DeviceCommand, _}
+import ca.wglabs.telemetry.model.{SendDeviceResponse, _}
 import ca.wglabs.telemetry.util.JsonFormat._
 import spray.json._
 import java.lang.Math._
@@ -37,29 +37,29 @@ import scala.util.Try
                                                                                  │       └──╣                      ╠──┘                 └──╣                      ╠──┘       └──╣                      ║
                                                     UniformFanOutShape           │          ║                      ║                    ┌──╣                      ║             ║                      ║
                                           [DeviceMeasurement, DeviceMeasurement] │          ╚══════════════════════╝     ┌─────────────▶│  │                      ║             ╚══════════════════════╝
-                                                    ╔══════════════════════╗     │                                       │              └──╣                      ║
-     FlowShape[Message, DeviceMeasurement]          ║                      ╠──┐  │   FlowShape[DeviceMeasurement, WrongWayInfraction]      ╚══════════════════════╝
-            ╔══════════════════════╗                ║                      │  │──┘          ╔══════════════════════╗     │
-            ║                      ║                ║                      ╠──┘             ║                      ║     │
-         ┌──╣                      ╠──┐          ┌──╣                      ╠──┐          ┌──╣                      ╠──┐  │
-   ─────▶│  │       Source         │  │─────────▶│  │       Broadcast      │  │─────────▶│  │       WrongWay       │  │──┘
-         └──╣                      ╠──┘          └──╣                      ╠──┘          └──╣                      ╠──┘
-            ║                      ║                ║                      ╠──┐             ║                      ║
-            ╚══════════════════════╝                ║                      │  │──┐          ╚══════════════════════╝
-                                                    ║                      ╠──┘  │
-                                                    ╚══════════════════════╝     │                Inlet[Any]
-                                                                                 │          ╔══════════════════════╗
-                                                                                 │          ║                      ║
-                                                                                 │       ┌──╣                      ║
-                                                                                 └──────▶│  │     Print Sink       ║
-                                                                                         └──╣                      ║
-                                                                                            ║                      ║
-                                                                                            ╚══════════════════════╝
-     FlowShape[DeviceEvent, TextMessage]       Source[DeviceEvent, ActorRef]
-            ╔══════════════════════╗               ╔══════════════════════╗
-            ║                      ║               ║                      ║
-         ┌──╣                      ╠──┐         ┌──╣                      ║
-   ◀─────│  │        Back          │  │◀────────│  │     SourceActor      ║
+                                                    ╔══════════════════════╗     │                                       │              └──╣                      ║                          |
+     FlowShape[Message, DeviceMeasurement]          ║                      ╠──┐  │   FlowShape[DeviceMeasurement, WrongWayInfraction]      ╚══════════════════════╝                          |
+            ╔══════════════════════╗                ║                      │  │──┘          ╔══════════════════════╗     │                                                                   |
+            ║                      ║                ║                      ╠──┘             ║                      ║     │                                                                   |
+         ┌──╣                      ╠──┐          ┌──╣                      ╠──┐          ┌──╣                      ╠──┐  │                                                                   |
+   ─────▶│  │       Source         │  │─────────▶│  │       Broadcast      │  │─────────▶│  │       WrongWay       │  │──┘                                                                   |
+         └──╣                      ╠──┘          └──╣                      ╠──┘          └──╣                      ╠──┘                                                                      |
+            ║                      ║                ║                      ╠──┐             ║                      ║                                                                         |
+            ╚══════════════════════╝                ║                      │  │──┐          ╚══════════════════════╝                                                                         |
+                                                    ║                      ╠──┘  │                                                                                                           |
+                                                    ╚══════════════════════╝     │                Inlet[Any]                                                                                 |
+                                                                                 │          ╔══════════════════════╗                                                                         |
+                                                                                 │          ║                      ║                                                                         |
+                                                                                 │       ┌──╣                      ║                                                                         |
+                                                                                 └──────▶│  │     Print Sink       ║                                                                         |
+                                                                                         └──╣                      ║                                                                         |
+                                                                                            ║                      ║                                                                         |
+                                                                                            ╚══════════════════════╝                                                                         |
+     FlowShape[DeviceEvent, TextMessage]       Source[DeviceEvent, ActorRef]                                                                                                                 |
+            ╔══════════════════════╗               ╔══════════════════════╗                                                                                                                  |
+            ║                      ║               ║                      ║                                                                                                                  |
+         ┌──╣                      ╠──┐         ┌──╣                      ║                                                                                                                  |
+   ◀─────│  │        Back          │  │◀────────│  │     SourceActor      ║◀─ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
          └──╣                      ╠──┘         └──╣                      ║
             ║                      ║               ║                      ║
             ╚══════════════════════╝               ╚══════════════════════╝
@@ -78,11 +78,11 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
     import GraphDSL.Implicits._
 
     // Sources
-    val materializer = builder.materializedValue.map(actorRef => DeviceJoined(deviceName, actorRef)).outlet
+    val materializer = builder.materializedValue.map(actorRef => AddDevice(deviceName, actorRef)).outlet
     val source = builder.add(messageToDeviceMeasurementFlow(deviceName))
 
     // Flows
-    val merge = builder.add(Merge[DeviceEvent](3))
+    val merge = builder.add(Merge[InfractionManagementCmd](3))
     val back = builder.add(deviceCommandToMessageFlow)
     val velocity = builder.add(detectVelocityInfractionFlow)
     val wrongWay = builder.add(detectWrongWayInfractionFlow)
@@ -90,7 +90,7 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
 
     // Sinks
     val printSink = builder.add(Sink.foreach(println)).in
-    val actorSink = builder.add(Sink.actorRef[DeviceEvent](infractionActorSink, DeviceLeft(deviceName))).in
+    val actorSink = builder.add(Sink.actorRef[InfractionManagementCmd](infractionActorSink, RemoveDevice(deviceName))).in
 
                                    materializer    ~>   merge
                   broadcast   ~>     velocity      ~>   merge    ~>   actorSink
@@ -104,7 +104,7 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
   // @formatter:on
 
   val infractionActorSink: ActorRef = actorSystem.actorOf(Props(new InfractionActor()))
-  val measurementActorSource: Source[DeviceEvent, ActorRef] = Source.actorRef[DeviceEvent](5, OverflowStrategy.fail)
+  val measurementActorSource: Source[InfractionManagementCmd, ActorRef] = Source.actorRef[InfractionManagementCmd](5, OverflowStrategy.fail)
 
   def messageToDeviceMeasurementFlow(deviceName: String): Flow[Message, DeviceMeasurement, NotUsed] =
     Flow[Message]
@@ -113,23 +113,23 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
           DeviceMeasurement(deviceName, measurement.parseJson.convertTo[Measurement])
       }
 
-  def deviceCommandToMessageFlow: Flow[DeviceEvent, TextMessage.Strict, NotUsed] =
-    Flow[DeviceEvent]
+  def deviceCommandToMessageFlow: Flow[InfractionManagementCmd, TextMessage.Strict, NotUsed] =
+    Flow[InfractionManagementCmd]
       .map {
-        case dc: DeviceCommand => TextMessage(dc.toJson.toString)
+        case dc: SendDeviceResponse => TextMessage(dc.toJson.toString)
       }
 
-  def detectVelocityInfractionFlow: Flow[DeviceMeasurement, VelocityInfraction, NotUsed] =
+  def detectVelocityInfractionFlow: Flow[DeviceMeasurement, RegisterVelocityInfraction, NotUsed] =
     Flow[DeviceMeasurement]
       .map(calculateVelocity)
       .filter(isVelocityInfraction)
-      .map(m => VelocityInfraction(m.name, m.measurement.velocity, m.measurement.position, new Date()))
+      .map(m => RegisterVelocityInfraction(m.name, m.measurement.velocity, m.measurement.position, new Date()))
 
-  def detectWrongWayInfractionFlow: Flow[DeviceMeasurement, WrongWayInfraction, NotUsed] =
+  def detectWrongWayInfractionFlow: Flow[DeviceMeasurement, RegisterWrongWayInfraction, NotUsed] =
     Flow[DeviceMeasurement]
       .groupedWithin(10, 2 seconds)
       .filter(isWrongWayInfraction)
-      .map(ms => WrongWayInfraction(ms.head.name, ms.head.measurement.position, new Date()))
+      .map(ms => RegisterWrongWayInfraction(ms.head.name, ms.head.measurement.position, new Date()))
 
 
 
