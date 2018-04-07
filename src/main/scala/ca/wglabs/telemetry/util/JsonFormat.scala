@@ -7,5 +7,5 @@ object JsonFormat extends DefaultJsonProtocol {
     implicit val velocityFormat = jsonFormat4(Velocity)
     implicit val positionFormat = jsonFormat3(Position)
     implicit val measurementFormat = jsonFormat2(Measurement)
-    implicit val spheroCommandFormat = jsonFormat1(DeviceResponse)
+    implicit val deviceResponseFormat = jsonFormat1(DeviceResponse)
 }

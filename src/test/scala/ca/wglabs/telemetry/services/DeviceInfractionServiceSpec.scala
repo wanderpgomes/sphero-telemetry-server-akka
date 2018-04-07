@@ -85,6 +85,6 @@ class DeviceInfractionServiceSpec extends FunSuite with Matchers with ScalatestR
 
     assert(!result)
   }
-  
+
 }
 
