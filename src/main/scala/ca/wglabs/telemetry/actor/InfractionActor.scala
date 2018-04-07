@@ -30,29 +30,28 @@ class InfractionActor extends Actor {
       println(s"Device left: $deviceName")
     }
 
-    case VelocityInfraction(deviceName, velocity, position, date) => {
-      val device = devices(deviceName).device
-      if (device.isExempt) {
-        println(s"Velocity Infraction detected for device name=$deviceName," +
-          s" but it is exempt for $infractionExemptionPeriod seconds")
-      } else {
-        sendDeviceCommand(device)
-        updateDeviceState(device)
-        system.scheduler.scheduleOnce(infractionExemptionPeriod seconds, self, InfractionExempt(device.name, false))
-        println(s"Velocity Infraction detected for device" +
-          s" name=$deviceName," +
-          s" velocity=${velocity.v} ${velocity.unit}," +
-          s" position=(${position.x}, ${position.y}," +
-          s" date=$date")
-      }
-    }
-
-    case InfractionExempt(deviceName, exempt) => {
+    case InfractionExempted(deviceName, exempt) => {
       val device = devices(deviceName).device
       device.isExempt = exempt
     }
 
-    case _ => println("Invalid message")
+    case infraction : Infraction => {
+      handleInfraction(infraction)
+    }
+
+    case _ => println("Invalid device event")
+  }
+
+  def handleInfraction(infraction: Infraction) = {
+    val device = devices(infraction.deviceName).device
+    if (!device.isExempt) {
+      sendDeviceCommand(device)
+      updateDeviceState(device)
+      logInfraction(infraction)
+
+      system.scheduler.scheduleOnce(infractionExemptionPeriod seconds, self, InfractionExempted(device.name, false))
+
+    } else logInfractionExempt(infraction)
   }
 
   def isFirstInfraction(device: Device) = device.points equals 0
@@ -64,6 +63,11 @@ class InfractionActor extends Actor {
 
   def sendDeviceCommand(device: Device) = {
     devices(device.name).actor !
-      DeviceCommand(if (isFirstInfraction(device)) firstInfractionColor else repeatedInfractionColor)
+      DeviceResponse(if (isFirstInfraction(device)) firstInfractionColor else repeatedInfractionColor)
   }
+
+  def logInfraction(infraction: Infraction) = println(s"Infraction detected: $infraction")
+
+  def logInfractionExempt(infraction: Infraction) =
+    println(s"Device exempt for $infractionExemptionPeriod seconds from infraction: $infraction")
 }

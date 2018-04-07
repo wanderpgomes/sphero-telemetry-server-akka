@@ -6,10 +6,11 @@ import akka.http.scaladsl.server.{Directives, Route}
 import akka.stream._
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge, Sink, Source}
 import ca.wglabs.telemetry.actor._
-import ca.wglabs.telemetry.model.{DeviceCommand, _}
+import ca.wglabs.telemetry.model.{DeviceResponse, _}
 import ca.wglabs.telemetry.util.JsonFormat._
 import spray.json._
 import java.lang.Math._
+import java.time.LocalDateTime
 import java.util.Date
 
 import scala.concurrent.duration._
@@ -66,7 +67,7 @@ import scala.util.Try
 
 */
 
-class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit val actorMaterializer: ActorMaterializer) extends Directives {
+class DeviceInfractionService(implicit val system : ActorSystem, implicit val actorMaterializer: ActorMaterializer) extends Directives {
 
   def route: Route = path("measurements" / Segment) { deviceName =>
     get {
@@ -103,7 +104,7 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
   })
   // @formatter:on
 
-  val infractionActorSink: ActorRef = actorSystem.actorOf(Props(new InfractionActor()))
+  val infractionActorSink: ActorRef = system.actorOf(Props(new InfractionActor()))
   val measurementActorSource: Source[DeviceEvent, ActorRef] = Source.actorRef[DeviceEvent](5, OverflowStrategy.fail)
 
   def messageToDeviceMeasurementFlow(deviceName: String): Flow[Message, DeviceMeasurement, NotUsed] =
@@ -116,20 +117,21 @@ class DeviceInfractionService(implicit val actorSystem : ActorSystem, implicit v
   def deviceCommandToMessageFlow: Flow[DeviceEvent, TextMessage.Strict, NotUsed] =
     Flow[DeviceEvent]
       .map {
-        case dc: DeviceCommand => TextMessage(dc.toJson.toString)
+        case dc: DeviceResponse => TextMessage(dc.toJson.toString)
+        case _  => TextMessage("")
       }
 
-  def detectVelocityInfractionFlow: Flow[DeviceMeasurement, VelocityInfraction, NotUsed] =
+  def detectVelocityInfractionFlow: Flow[DeviceMeasurement, VelocityInfractionDetected, NotUsed] =
     Flow[DeviceMeasurement]
       .map(calculateVelocity)
       .filter(isVelocityInfraction)
-      .map(m => VelocityInfraction(m.name, m.measurement.velocity, m.measurement.position, new Date()))
+      .map(m => VelocityInfractionDetected(m.name, m.measurement.velocity, m.measurement.position, new Date()))
 
-  def detectWrongWayInfractionFlow: Flow[DeviceMeasurement, WrongWayInfraction, NotUsed] =
+  def detectWrongWayInfractionFlow: Flow[DeviceMeasurement, WrongWayInfractionDetected, NotUsed] =
     Flow[DeviceMeasurement]
       .groupedWithin(10, 2 seconds)
       .filter(isWrongWayInfraction)
-      .map(ms => WrongWayInfraction(ms.head.name, ms.head.measurement.position, new Date()))
+      .map(ms => WrongWayInfractionDetected(ms.head.name, ms.head.measurement.position, LocalDateTime.now()))
 
 
 

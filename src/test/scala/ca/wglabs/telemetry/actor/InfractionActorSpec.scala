@@ -38,7 +38,7 @@ class InfractionActorSpec extends TestKit(ActorSystem())
       val probe = TestProbe()
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
-      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      actorUnderTest ! VelocityInfractionDetected(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
       actorUnderTest.underlyingActor.devices.head._2.device.points mustEqual 1
     }
 
@@ -46,9 +46,9 @@ class InfractionActorSpec extends TestKit(ActorSystem())
       val probe = TestProbe()
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
-      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      actorUnderTest ! VelocityInfractionDetected(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
       actorUnderTest.underlyingActor.devices.head._2.device.points mustEqual 1
-      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      actorUnderTest ! VelocityInfractionDetected(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
       actorUnderTest.underlyingActor.devices.head._2.device.points mustEqual 1
     }
 
@@ -56,7 +56,7 @@ class InfractionActorSpec extends TestKit(ActorSystem())
       val probe = TestProbe()
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
-      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      actorUnderTest ! VelocityInfractionDetected(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
       actorUnderTest.underlyingActor.devices.head._2.device.isExempt mustEqual true
     }
 
@@ -64,19 +64,19 @@ class InfractionActorSpec extends TestKit(ActorSystem())
       val probe = TestProbe()
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
-      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
-      probe.expectMsg(DeviceCommand("yellow"))
+      actorUnderTest ! VelocityInfractionDetected(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      probe.expectMsg(DeviceResponse("yellow"))
     }
 
     "send a 'DeviceCommand(red)' message to the device actor after receiving a second 'VelocityInfraction' message and it's not exempt" in {
       val probe = TestProbe()
       val deviceName = "new-device"
       actorUnderTest ! DeviceJoined(deviceName, probe.ref)
-      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
-      probe.expectMsg(DeviceCommand("yellow"))
-      actorUnderTest ! InfractionExempt(deviceName, false)
-      actorUnderTest ! VelocityInfraction(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
-      probe.expectMsg(DeviceCommand("red"))
+      actorUnderTest ! VelocityInfractionDetected(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      probe.expectMsg(DeviceResponse("yellow"))
+      actorUnderTest ! InfractionExempted(deviceName, false)
+      actorUnderTest ! VelocityInfractionDetected(deviceName, Velocity("mm/s", 900, 900, 1272.0), Position("mm", 100, 100), new Date())
+      probe.expectMsg(DeviceResponse("red"))
     }
   }
 

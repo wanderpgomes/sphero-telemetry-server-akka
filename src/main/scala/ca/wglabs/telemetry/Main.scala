@@ -7,7 +7,7 @@ import ca.wglabs.telemetry.services.DeviceInfractionService
 
 import scala.io.StdIn
 
-object Main extends App {
+object Main extends App  {
 
   implicit val actorSystem = ActorSystem("akka-system")
   implicit val flowMaterializer = ActorMaterializer()
@@ -21,9 +21,9 @@ object Main extends App {
 
   val port = config.getInt("app.port")
 
-  val spheroTelemetryService = new DeviceInfractionService()
+  val deviceInfractionService = new DeviceInfractionService()
 
-  val binding = Http().bindAndHandle(spheroTelemetryService.route, interface, port)
+  val binding = Http().bindAndHandle(deviceInfractionService.route, interface, port)
   println(s"Server is now online at http://$interface:$port\nPress RETURN to stop...")
 
   StdIn.readLine()
